@@ -1,0 +1,40 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist downloaded models across restarts/recreates.
+      - ollama_data:/root/.ollama
+      # Startup helper that launches Ollama and ensures model is present.
+      - ./scripts/ollama-init.sh:/usr/local/bin/ollama-init.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/ollama-init.sh"]
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e4b}
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  openclaw:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: openclaw
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "${OPENCLAW_PORT:-3000}:3000"
+    environment:
+      # OpenClaw provider preconfiguration for local Ollama.
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e4b}
+
+volumes:
+  ollama_data:
+    name: ollama_data
